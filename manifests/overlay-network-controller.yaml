@@ -1,0 +1,109 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: self-service-overlay
+---
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  name: overlay-network-controller
+  namespace: self-service-overlay
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: net-attach-def-editor
+rules:
+- apiGroups:
+  - k8s.cni.cncf.io
+  resources:
+  - network-attachment-definitions
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - delete
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: net-attach-def-editor
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: net-attach-def-editor
+subjects:
+- kind: ServiceAccount
+  name: overlay-network-controller
+  namespace: self-service-overlay
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: config-map-reader
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: config-map-reader
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: config-map-reader
+subjects:
+- kind: ServiceAccount
+  name: overlay-network-controller
+  namespace: self-service-overlay
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: overlay-network-controller
+  name: overlay-network-controller
+  namespace: self-service-overlay
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: overlay-network-controller
+  template:
+    metadata:
+      labels:
+        app: overlay-network-controller
+    spec:
+      serviceAccountName: overlay-network-controller
+      securityContext:
+        runAsUser: 107
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      priorityClassName: system-cluster-critical
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 5
+      containers:
+      - name: controller
+        image: docker.io/library/alpine:latest
+        command: [ "sh", "-c", "sleep infinity" ]
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            cpu: 100m
+            memory: 70Mi
